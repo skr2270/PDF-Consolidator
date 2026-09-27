@@ -166,4 +166,4 @@ PDF Consolidator is designed in alignment with:
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).\n
+This project is licensed under the [MIT License](LICENSE).

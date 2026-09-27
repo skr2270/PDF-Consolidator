@@ -50,3 +50,7 @@ output/
 scratch/
 *.log
 *.tmp
+
+# Agent and Local MCP Secrets
+.agents/
+data/*.db
