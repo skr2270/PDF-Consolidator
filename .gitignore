@@ -54,3 +54,4 @@ scratch/
 # Agent and Local MCP Secrets
 .agents/
 data/*.db
+.venv/
