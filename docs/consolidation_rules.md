@@ -6,7 +6,18 @@ When retail store associates pack inventory over days, they generate dozens of b
 
 ---
 
-## 2. The 3-Tuple Composite Aggregation Key
+## 2. SKU Sanitization & Cleaning Rules
+
+To prevent identical items from failing to merge due to associate formatting noise:
+1. **SKU Sanitization**:
+   * Strips prefixes like `SKU:`, `#`, `*`, spaces, and punctuation.
+   * Converts to standardized uppercase alphanumeric string: `SKU = re.sub(r'[^A-Za-z0-9]', '', raw_sku).upper()`.
+2. **Item Description Reconciliation**:
+   * If two bags record the same SKU with slight description variations (e.g. `*BANGU COTTON SAREE` vs `BANGU COTTON SAREE`), the cleaner description (stripped of prefix flags) or the longest non-empty description is adopted.
+
+---
+
+## 3. The 3-Tuple Composite Aggregation Key
 
 Items are consolidated using a strict 3-tuple key:
 
@@ -19,7 +30,15 @@ $$\text{Aggregation Key} = \big( \text{SKU}, \ \text{Unit Cost Price}, \ \text{H
 
 ---
 
-## 3. Incremental Delta Updates & Last-Minute Order Ingestion
+## 4. Bag Cancellation & De-Selection Workflows
+
+In live dispatch environments, store managers may need to drop a damaged or held-back container (e.g. `Bag 85` held back) just before vehicle movement:
+* The user interface and CLI support `--exclude-bags "BAG-85,BAG-86"` or interactive checkbox de-selection.
+* When a bag is excluded, all associated raw order items are pruned from the aggregation set, and totals are recomputed dynamically.
+
+---
+
+## 5. Incremental Delta Updates & Last-Minute Order Ingestion
 
 In physical logistics, store staff frequently pack and add late bags right up until vehicle departure (as seen when Sujatha Nagar added +8 orders `HCT-719 to 726` and then +5 orders `HCT-727 to 731`).
 
@@ -40,19 +59,7 @@ The **Delta Processor** supports seamless incremental updates:
 
 ---
 
-## 4. Bag & Container Audit Trail Preservation
-
-While line items are consolidated for transit paperwork, the receiving warehouse must know which bag contains which items during unloading:
-
-* The consolidator records every source container reference:
-  $$\text{Container Set} = \bigcup_{k} \text{bag\_reference}_k$$
-* In the output documentation:
-  * **Master Transfer Order**: Summarizes the physical container scope in the `Reason` field (e.g. `Consolidated Inter-Branch Stock Transfer (SN - VSPM: 91 Bags, BAG-01 to BAG-91)`).
-  * **Warehouse Excel Checklist**: Includes an itemized **Bag-by-Bag Unpacking Annexure** mapping each physical bag to its exact SKU contents.
-
----
-
-## 5. Currency & Number-to-Words Engine
+## 6. Currency & Number-to-Words Engine
 
 To comply with statutory legal standards for transit challans and invoices, numerical grand totals are translated into formal words.
 
@@ -64,6 +71,6 @@ Unlike Western notation (Thousands, Millions, Billions), Indian trade documentat
 #### Syntax Rules:
 * Value ₹20,02,536.00 $\rightarrow$ `Indian Rupee Twenty Lakh Two Thousand Five Hundred Thirty-Six Only`
 * Value ₹6,01,808.50 $\rightarrow$ `Indian Rupee Six Lakh One Thousand Eight Hundred Eight and Fifty Paise Only`
-* Always capitalized with standard hyphenation (`Thirty-Six`, `Twenty-One`).
-* Appends `and XX Paise` if fractional currency exists.
+* Handles single-digit paise correctly: ₹100.05 $\rightarrow$ `One Hundred and Five Paise`, ₹100.50 $\rightarrow$ `One Hundred and Fifty Paise`.
+* Handles multi-crore values deterministically.
 * Concludes with mandatory legal suffix `Only`.\n

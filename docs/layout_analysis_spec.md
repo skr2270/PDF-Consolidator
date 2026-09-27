@@ -3,7 +3,7 @@
 ## 1. Objectives
 
 The **Layout Architecture Analysis Engine** performs forensic structural analysis on input PDF transfer documents to extract:
-1. Exact visual geometry, margins, and coordinate boundaries of the 6 layout zones.
+1. Exact visual geometry, margins, and coordinate boundaries of the 6 layout zones across single and multi-page documents.
 2. Full typography hierarchy, font families, weights, and leading.
 3. Design color tokens (table header fills, divider rules, text shades).
 4. Table column grid architecture (column widths, percentage distribution, and alignments).
@@ -18,7 +18,7 @@ The engine segments each document page into 6 distinct horizontal zones:
 ```
 +-------------------------------------------------------------------------+
 | ZONE 1: MASTER BRANDING & DOCUMENT IDENTITY (y: ~50 - 140 pt)           |
-| [Logo: 115.5 x 46.8 pt]                            [Title: Ubuntu 28pt] |
+| [Logo: Proportional Box]                           [Title: Ubuntu 28pt] |
 | Company Legal Entity, GSTIN, Address, Contacts     TransferOrder#, Date |
 |                                                    Created By           |
 +-------------------------------------------------------------------------+
@@ -44,10 +44,11 @@ The engine segments each document page into 6 distinct horizontal zones:
 +-------------------------------------------------------------------------+
 ```
 
-### 2.1 Dimensional Attributes (A4 Default)
-* **Page Bounds**: $595.42	ext{ pt} 	imes 841.69	ext{ pt}$ ($210	ext{ mm} 	imes 297	ext{ mm}$).
+### 2.1 Dimensional Attributes & Dynamic Paper Sizing
+* **ISO A4 Bounds**: $595.42	ext{ pt} 	imes 841.69	ext{ pt}$ ($210	ext{ mm} 	imes 297	ext{ mm}$).
+* **US Letter Bounds**: $612.0	ext{ pt} 	imes 792.0	ext{ pt}$ ($8.5	ext{ in} 	imes 11.0	ext{ in}$).
 * **Margin Insets**: Top $50.4	ext{ pt}$, Bottom $50.4	ext{ pt}$, Left $45.6	ext{ pt}$, Right $34.8	ext{ pt}$.
-* **Active Printable Width**: $515.0	ext{ pt}$ ($181.7	ext{ mm}$).
+* **Active Printable Width**: $515.0	ext{ pt}$ ($181.7	ext{ mm}$) for A4.
 
 ---
 
@@ -105,7 +106,7 @@ Measures exact column geometry and alignment rules:
 
 ## 6. Comprehensive Quality Control & Audit Engine
 
-The audit engine runs 5 automated checks on every ingested document batch:
+The audit engine runs 6 automated checks on every ingested document batch:
 
 1. **Row Arithmetic Parity**:
    $$\Delta = |	ext{Quantity} 	imes 	ext{Cost Price} - 	ext{Row Amount}|$$

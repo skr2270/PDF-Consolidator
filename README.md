@@ -21,7 +21,7 @@
 ## Key Capabilities
 
 1. **Document Layout & Architecture Analyzer**:
-   * Inspects geometry, page bounds (A4/Letter), margins, and coordinate zone boundaries.
+   * Inspects geometry, page bounds (A4/Letter), margins, and coordinate zone boundaries across single and multi-page documents.
    * Discovers embedded font families, typographic hierarchy, font weights, and leading.
    * Extracts design color tokens (header fills, divider rules, font colors).
    * Detects table columns, relative percentage widths, and alignments.
@@ -30,17 +30,21 @@
 2. **Universal Multi-ERP Parsing with Circular Ingestion Guard**:
    * Out-of-the-box adapters for **Zoho** (Books, Inventory, POS), **Tally Prime / ERP 9**, and a **Spatial Table Parser** for arbitrary PDFs.
    * Circular Ingestion Guard strictly excludes previously generated consolidated documents (`Transfer_Order_*.pdf`, `Consolidated.pdf`, `.xlsx`) to prevent data corruption upon re-runs.
+   * Multi-page order parsing: Aggregates rows across all pages of dense orders.
+   * Cloud-drive hydration checks for Google Drive / OneDrive on-demand files.
 
 3. **Intelligent SKU Consolidation & Incremental Delta Updates**:
    * Groups items by 3-tuple `(SKU, Cost Price, HSN)` to aggregate quantities without inventory valuation drift.
    * Full incremental update support: Dynamically incorporates newly added orders and displays a clear delta audit (+Pieces, +Value, +Bags).
+   * Interactive bag de-selection for held-back or damaged containers.
    * Translates grand totals into formal Indian currency words (`Crores / Lakhs / Thousands / Paise`).
 
 4. **Publication-Ready PDF Generation**:
    * High-fidelity ReportLab engine matching original ERP styling.
    * Multi-page flow with automatic repeated table headers (`repeatRows=1`).
    * Dynamic two-pass page numbering (`NumberedCanvas`).
-   * High-resolution transparent logo scaling and authorized signature blocks.
+   * Proportional logo bounding-box scaling ($130 \times 50\text{ pt}$) preserving aspect ratio.
+   * Bundled offline font fallback (`Ubuntu` $\rightarrow$ `Helvetica`).
    * Dual location mirroring: Saves to branch folder and parent consignment folder.
 
 5. **Multi-Branch Fleet Vehicle Manifest**:
@@ -50,7 +54,7 @@
    * Generates a 3-tab workbook: Consignment Overview, Master Product Checklist with check-off boxes, and Bag-by-Bag Unpacking Annexure.
 
 7. **Dual Interfaces**:
-   * **CLI**: Fast command-line batch runner (`analyze`, `consolidate`, `fleet`).
+   * **CLI**: Fast command-line batch runner (`analyze`, `consolidate`, `fleet`) with native folder picker dialogs.
    * **Web Dashboard**: Interactive browser UI with live layout preview and one-click downloads.
 
 ---
@@ -105,6 +109,12 @@ PDF Consolidator/
 ├── cli.py                         # Command-line interface
 ├── app.py                         # Interactive browser dashboard
 │
+├── assets/                        # Bundled offline assets
+│   ├── logo.png                   # Official transparent company logo
+│   └── fonts/                     # Bundled Ubuntu TrueType fonts
+│       ├── Ubuntu-Regular.ttf
+│       └── Ubuntu-Bold.ttf
+│
 ├── docs/                          # In-depth architectural & technical documentation
 │   ├── architecture.md            # System design & data pipeline architecture
 │   ├── layout_analysis_spec.md    # Layout & format architecture analyzer specification
@@ -122,12 +132,16 @@ PDF Consolidator/
 │
 ├── parsers/                       # Generalized multi-ERP ingestion engine
 │   ├── guard.py                   # Circular ingestion guard (filters generated files)
-│   ├── base_parser.py             # Abstract document parser interface
+│   ├── hydration.py               # Cloud drive on-demand file hydration check
+│   ├── base_parser.py             # Abstract document parser interface (multi-page)
 │   ├── generic_table_parser.py    # Spatial table extractor for arbitrary PDFs
 │   ├── zoho_parser.py             # Optimized extractor for Zoho POS / Books
-│   └── tally_parser.py            # Optimized extractor for Tally Prime / ERP 9
+│   ├── tally_parser.py            # Optimized extractor for Tally Prime / ERP 9
+│   └── ocr_fallback.py            # OCR fallback engine for raster/scanned PDFs
 │
 ├── consolidator/                  # Grouping, delta reconciliation & currency engine
+│   ├── sku_sanitizer.py           # SKU cleaning, alias resolution, noise stripping
+│   ├── bag_filter.py              # Interactive container cancellation/de-selection
 │   ├── item_grouper.py            # SKU/HSN/Rate grouping with bag tracking
 │   ├── delta_processor.py         # Incremental update processor (+late orders)
 │   ├── arithmetic_verifier.py     # Row & consignment mathematical validation
@@ -136,9 +150,17 @@ PDF Consolidator/
 ├── fleet/                         # Multi-branch fleet vehicle consolidation
 │   └── fleet_manager.py           # Compiles multi-branch master fleet manifest
 │
-└── generator/                     # Publication & export engine
-    ├── pdf_builder.py             # Multi-page ReportLab PDF builder with branding
-    └── excel_exporter.py          # Multi-tab warehouse unloading checklist (.xlsx)
+├── db/                            # SQLite persistence & audit repository
+│   └── database.py                # SQLite schema migrations & dispatch logger
+│
+├── generator/                     # Publication & export engine
+│   ├── pdf_builder.py             # Multi-page ReportLab PDF builder with branding
+│   └── excel_exporter.py          # Multi-tab warehouse unloading checklist (.xlsx)
+│
+└── tests/                         # Automated unit & integration tests
+    ├── test_math_verifier.py
+    ├── test_currency_words.py
+    └── test_sku_grouper.py
 ```
 
 ---
@@ -166,4 +188,4 @@ PDF Consolidator is designed in alignment with:
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).\n

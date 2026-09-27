@@ -24,57 +24,60 @@ flowchart TD
     subgraph Ingestion ["1. Document Ingestion & Guard Layer"]
         A[Input Folder / Drag & Drop PDFs] --> B[Circular Ingestion Guard]
         B -->|Filter out Transfer_Order_*.pdf & Consolidated.pdf| C[Raw Order PDFs]
-        C --> D[PDF Reader & Plumber Engine]
+        C --> D[Hydration & Accessibility Check]
+        D --> E[PDF Reader & Plumber Engine]
+        E -->|Vector PDF| F[Native Text Extractor]
+        E -->|Scanned / Raster PDF| G[OCR Fallback Engine]
     end
 
     subgraph Stage1 ["2. Stage 1: Document Layout Architecture & Audit"]
-        D --> E[Geometry & Coordinate Analyzer]
-        D --> F[Typography & Font Inspector]
-        D --> G[Color Palette & Token Extractor]
-        D --> H[Table Grid & Boundary Detector]
-        D --> I[Quality Control & Audit Engine]
+        F & G --> H[Geometry & Coordinate Analyzer]
+        F & G --> I[Typography & Font Inspector]
+        F & G --> J[Color Palette & Token Extractor]
+        F & G --> K[Table Grid & Boundary Detector]
+        F & G --> L[Quality Control & Audit Engine]
         
-        I --> I1[Math Verifier: Qty x Rate = Amt]
-        I --> I2[Sequence Gap Detector: e.g. Missing HCT-587]
-        I --> I3[Container Order Check: e.g. Bag 9 vs Bag 8]
-        I --> I4[Catalog Tag Detector: * and # prefixes]
-        I --> I5[Cross-Order Duplicate SKU Detector]
+        L --> L1[Math Verifier: Qty x Rate = Amt]
+        L --> L2[Sequence Gap Detector: e.g. Missing HCT-587]
+        L --> L3[Container Order Check: e.g. Bag 9 vs Bag 8]
+        L --> L4[Catalog Tag Detector: * and # prefixes]
+        L --> L5[Cross-Order Duplicate SKU Detector]
 
-        E & F & G & H & I --> J[Architectural Layout & Audit Report]
+        H & I & J & K & L --> M[Architectural Layout & Audit Report]
     end
 
     subgraph Stage2 ["3. Stage 2: Multi-ERP Parsing Layer"]
-        D --> K{ERP Strategy Selector}
-        K -->|Zoho Format| L[Zoho Parser]
-        K -->|Tally Format| M[Tally Parser]
-        K -->|Custom / Other| N[Generic Spatial Table Parser]
+        F & G --> N{ERP Strategy Selector}
+        N -->|Zoho Format| O[Zoho Multi-Page Parser]
+        N -->|Tally Format| P[Tally Multi-Page Parser]
+        N -->|Custom / Other| Q[Generic Spatial Table Parser]
         
-        L & M & N --> O[Normalized Order Schema]
+        O & P & Q --> R[Normalized Order Schema]
     end
 
     subgraph Stage3 ["4. Stage 3: Consolidation & Delta Engine"]
-        O --> P[SKU & HSN Grouping Engine]
-        P --> Q[Container / Bag Trail Mapper]
-        P --> R[Incremental Delta Processor]
-        R --> S[Before vs Added vs After Reconciliation]
-        S --> T[Indian & International Currency Words Engine]
+        R --> S[SKU Sanitization & Name Resolver]
+        S --> T[Bag De-selection & Cancellation Filter]
+        T --> U[SKU & HSN Grouping Engine]
+        U --> V[Container / Bag Trail Mapper]
+        V --> W[Incremental Delta Processor]
+        W --> X[Indian & International Currency Words Engine]
     end
 
-    subgraph Stage4 ["5. Stage 4: Multi-Branch & Fleet Consolidation"]
-        T --> U[Branch 1: Gajuwaka]
-        T --> V[Branch 2: Beach Road]
-        T --> W[Branch 3: Sujatha Nagar]
-        U & V & W --> X[Fleet Consignment Summary: Vehicle Grand Total]
+    subgraph Stage4 ["5. Stage 4: Multi-Branch & Persistence Layer"]
+        X --> Y[Fleet Manager: Multi-Branch Consolidation]
+        Y --> Z[SQLite Dispatch & SKU Registry]
+        Z --> AA[Dispatch History & Audit Trail]
     end
 
     subgraph Stage5 ["6. Stage 5: Publication & Dual Export"]
-        T --> Y[ReportLab Vector PDF Builder]
-        T --> Z[OpenPyXL Warehouse Checklist Exporter]
+        X --> AB[ReportLab Vector PDF Builder]
+        X --> AC[OpenPyXL Warehouse Checklist Exporter]
         
-        Y --> AA[Consolidated Transit PDF: Multi-page, Repeated Headers]
-        Z --> AB[3-Tab Excel Unloading Workbook]
+        AB --> AD[Consolidated Transit PDF: Multi-page, Repeated Headers]
+        AC --> AE[3-Tab Excel Unloading Workbook]
         
-        AA --> AC[Dual Mirroring: Branch Folder & Root Folder]
+        AD --> AF[Dual Mirroring: Branch Folder & Root Folder]
     end
 ```
 
@@ -83,7 +86,7 @@ flowchart TD
 ## 3. Modular Architecture Breakdown
 
 ### 3.1 `analyzer/` — Document Layout & Format Architecture Engine
-* **`geometry.py`**: Auto-detects page size (A4, Letter), orientation, margin insets (top, bottom, left, right), and maps the 6 spatial layout zones.
+* **`geometry.py`**: Auto-detects page size (A4, Letter), orientation, margin insets (top, bottom, left, right), and maps the 6 spatial layout zones across single or multi-page documents.
 * **`typography.py`**: Extracts embedded font families (Ubuntu, Helvetica), scales font sizes into a 6-tier hierarchy, and records font weights and leading.
 * **`palette.py`**: Extracts exact vector fills (header bar `#3C3D3A`), border rules (`#ADADAD`, `#CCCCCC`), and text colors into design tokens.
 * **`table_grid.py`**: Analyzes character coordinate bounding boxes to determine column boundaries, width percentages, and alignment (numeric right-aligned, text left-aligned).
@@ -96,83 +99,64 @@ flowchart TD
 
 ### 3.2 `parsers/` — Multi-ERP Ingestion Layer
 * **`guard.py` (Circular Ingestion Guard)**: Inspects filenames and metadata to strictly exclude previously generated outputs (`Transfer_Order_*.pdf`, `Consolidated.pdf`, `.xlsx`, temporary files), preventing circular duplication.
-* **`base_parser.py`**: Abstract contract for ERP-specific parsers.
+* **`hydration.py`**: Validates file accessibility on cloud-synced drives (e.g. Google Drive for Desktop), checking for non-zero file sizes and handling on-demand file hydration retries.
+* **`base_parser.py`**: Abstract contract for ERP-specific parsers with **multi-page iteration support** (`for page in pdf.pages`).
 * **`zoho_parser.py`**: Optimized for Zoho Books, Zoho Inventory, and Zoho POS.
 * **`tally_parser.py`**: Optimized for Tally Prime and Tally.ERP 9 stock transfer vouchers.
 * **`generic_table_parser.py`**: Universal spatial table extractor using horizontal character clustering and whitespace boundary projection.
+* **`ocr_fallback.py`**: Gracefully invokes OCR for raster or flattened image PDFs when zero digital characters are detected.
 
 ### 3.3 `consolidator/` — Grouping, Delta & Currency Engine
+* **`sku_sanitizer.py`**: Trims whitespace, standardizes casing, strips non-alphanumeric noise, and resolves catalog aliases.
+* **`bag_filter.py`**: Allows users to interactively exclude/cancel specific bags before consolidation.
 * **`item_grouper.py`**: Groups items by 3-tuple `(SKU, Cost Price, HSN)` while appending container references to an audit set.
 * **`delta_processor.py`**: Handles incremental additions (e.g. +8 orders, +5 orders) by calculating the baseline, added delta, and updated total.
-* **`currency_words.py`**: Translates monetary amounts into words with exact paise precision using Indian numbering (Crores, Lakhs, Thousands, Hundreds) and Western formats.
+* **`currency_words.py`**: Translates monetary amounts into words with exact paise precision using Indian numbering (Crores, Lakhs, Thousands, Hundreds) and Western formats, handling zero paise, single-digit paise, and multi-crore numbers.
 
 ### 3.4 `fleet/` — Multi-Branch Fleet Management
 * **`fleet_manager.py`**: Scans parent directories containing multiple branch subfolders (e.g. Gajuwaka, Beach Road, Sujatha Nagar), builds store-level unified transit documents, and compiles a unified **Master Fleet Vehicle Manifest** summarizing the entire consignment.
 
-### 3.5 `generator/` — Publication & Dual Export Engine
-* **`pdf_builder.py`**: ReportLab engine generating vector PDFs matching analyzed styling, with two-pass `NumberedCanvas` dynamic page numbering, repeated table headers on page breaks (`repeatRows=1`), brand logo placement, and orphan prevention.
-* **`excel_exporter.py`**: OpenPyXL engine emitting a 3-tab warehouse unloading workbook (Consignment Summary, Master Product Checklist with check-off boxes, and Bag-by-Bag Unpacking Annexure).
+### 3.5 `db/` — SQLite Persistence Layer
+* **`database.py`**: Local relational SQLite database managing historical runs, audit logs, and SKU registries:
+```sql
+CREATE TABLE IF NOT EXISTS dispatches (
+    id TEXT PRIMARY KEY,
+    dispatch_date DATE NOT NULL,
+    source_branch TEXT NOT NULL,
+    dest_branch TEXT NOT NULL,
+    source_gstin TEXT NOT NULL,
+    dest_gstin TEXT NOT NULL,
+    total_bags INTEGER NOT NULL,
+    total_pieces REAL NOT NULL,
+    total_value REAL NOT NULL,
+    pdf_path TEXT,
+    excel_path TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
----
+CREATE TABLE IF NOT EXISTS consolidated_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dispatch_id TEXT REFERENCES dispatches(id),
+    sku TEXT NOT NULL,
+    description TEXT NOT NULL,
+    hsn TEXT NOT NULL,
+    qty REAL NOT NULL,
+    cost_price REAL NOT NULL,
+    amount REAL NOT NULL,
+    bags_contained TEXT
+);
 
-## 4. Normalized Data Schema
+CREATE TABLE IF NOT EXISTS raw_orders (
+    id TEXT PRIMARY KEY,
+    dispatch_id TEXT REFERENCES dispatches(id),
+    order_no TEXT NOT NULL,
+    original_date DATE,
+    bag_no TEXT,
+    pieces REAL,
+    amount REAL
+);
+```
 
-Every ingested order is normalized into a standard JSON schema:
-
-```json
-{
-  "order_metadata": {
-    "source_system": "Zoho Inventory | Tally | Generic",
-    "document_type": "Transfer Order | Delivery Challan",
-    "original_order_id": "HCT-579",
-    "original_date": "2026-09-19",
-    "created_by": "B Sai Praveen",
-    "place_of_supply": "Telangana (36)"
-  },
-  "parties": {
-    "company": {
-      "name": "Horizon Collections",
-      "address": "K. V. Rangareddy Telangana 500070 India",
-      "gstin": "36BAZPV7883C1ZO",
-      "phone": "+91 833 299 0022",
-      "email": "horizoncollection02@gmail.com",
-      "website": "thehorizoncollections.com"
-    },
-    "source_location": {
-      "name": "Gajuwaka Store",
-      "address": "Visakhapatnam Andhra Pradesh 530026 India",
-      "gstin": "37BAZPV7883C2ZL",
-      "phone": "+918332990033",
-      "website": "thehorizoncollections.com"
-    },
-    "destination_location": {
-      "name": "Vanasthalipuram Store",
-      "address": "K. V. Rangareddy Telangana 500070 India",
-      "gstin": "36BAZPV7883C1ZO",
-      "phone": "+91 833 299 0022",
-      "website": "thehorizoncollections.com"
-    }
-  },
-  "line_items": [
-    {
-      "item_index": 1,
-      "description": "Alpha Pearl Border Peach Saree",
-      "sku": "35659",
-      "hsn_sac": "540754",
-      "quantity": 10.0,
-      "unit": "pcs",
-      "cost_price": 499.0,
-      "amount": 4990.0,
-      "container_reference": "BAG - 1"
-    }
-  ],
-  "totals": {
-    "total_quantity": 10.0,
-    "total_amount": 4990.0,
-    "amount_in_words": "Indian Rupee Four Thousand Nine Hundred Ninety Only"
-  },
-  "dispatch_notes": {
-    "reason": "GWK - VSPM BAG - 1"
-  }
-}
-```\n
+### 3.6 `generator/` — Publication & Dual Export Engine
+* **`pdf_builder.py`**: ReportLab engine generating vector PDFs matching analyzed styling, with two-pass `NumberedCanvas` dynamic page numbering, repeated table headers on page breaks (`repeatRows=1`), brand logo aspect-ratio fitting, offline font fallback (`Ubuntu` $ightarrow$ `Helvetica`), and orphan prevention.
+* **`excel_exporter.py`**: OpenPyXL engine emitting a 3-tab warehouse unloading workbook (Consignment Summary, Master Product Checklist with check-off boxes, and Bag-by-Bag Unpacking Annexure).\n

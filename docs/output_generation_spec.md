@@ -40,11 +40,18 @@ class NumberedCanvas(canvas.Canvas):
   * The Summary row (`Items in Total`, `Total Rs.`), legal `Total In Words`, and `Authorized Signature` block are wrapped in a `KeepTogether` container.
   * This guarantees that totals and signature lines are never separated across page breaks.
 
-### 2.3 Logo Aspect Ratio & Transparency
-* Automatically detects PNG dimensions and mode (`RGBA`).
-* Preserves transparency channel and calculates bounding box scaling (default $115.5\text{ pt} \times 46.76\text{ pt}$, aspect ratio $\sim 2.47$).
+### 2.3 Proportional Logo Bounding-Box Scaling
+To support logos of arbitrary aspect ratios (square, crest, or horizontal banner) without distortion:
+* Defines maximum bounding box: $W_{\text{max}} = 130\text{ pt}$, $H_{\text{max}} = 50\text{ pt}$.
+* Scales proportionally:
+  $$\text{scale} = \min\left(\frac{W_{\text{max}}}{W_{\text{orig}}}, \frac{H_{\text{max}}}{H_{\text{orig}}}\right)$$
+* Preserves RGBA transparency channel.
 
-### 2.4 Dual Output Location Mirroring
+### 2.4 Offline Font Portability & Fallback
+* Primary fonts are bundled locally in `assets/fonts/` (`Ubuntu-Regular.ttf` and `Ubuntu-Bold.ttf`).
+* If custom TTFs are missing on a host system, gracefully falls back to core standard PDF fonts (`Helvetica` and `Helvetica-Bold`) without throwing fatal runtime errors.
+
+### 2.5 Dual Output Location Mirroring
 To support both branch-level filing and vehicle-level paperwork:
 * Saves a copy directly into the branch directory:
   `[Branch]/Transfer_Order_[Branch]_[ID].pdf`
@@ -63,7 +70,10 @@ Under Rule 55 of the Central Goods and Services Tax (CGST) Rules in India, goods
 4. **Place of Supply**: State of destination and state code (`Telangana (36)`).
 5. **HSN Code and Description of Goods**: Complete 6-to-8 digit Harmonized System of Nomenclature code.
 6. **Quantity & Taxable Value**: Accurate physical unit quantities and valuation at transfer cost.
-7. **Signature of Consignor**: Dedicated signature line for authorized store manager sign-off upon dispatch.
+7. **Compliance Badges**:
+   * Inter-State vs Intra-State Stock Transfer indicator.
+   * e-Way Bill mandatory threshold indicator ($> ₹50,000$).
+8. **Signature of Consignor**: Dedicated signature line for authorized store manager sign-off upon dispatch.
 
 ---
 
